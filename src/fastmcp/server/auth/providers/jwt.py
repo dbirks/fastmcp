@@ -383,6 +383,17 @@ class JWTVerifier(TokenVerifier):
             # Extract client ID early for logging
             client_id = claims.get("client_id") or claims.get("sub") or "unknown"
 
+            # Debug log all token claims for troubleshooting
+            self.logger.debug(
+                "JWT validation for client %s - token claims: iss=%s, aud=%s, sub=%s, exp=%s, scopes=%s",
+                client_id,
+                claims.get("iss"),
+                claims.get("aud"),
+                claims.get("sub"),
+                claims.get("exp"),
+                claims.get("scp") or claims.get("scope"),
+            )
+
             # Validate expiration
             exp = claims.get("exp")
             if exp and exp < time.time():
@@ -395,10 +406,13 @@ class JWTVerifier(TokenVerifier):
             # Validate issuer - note we use issuer instead of issuer_url here because
             # issuer is optional, allowing users to make this check optional
             if self.issuer:
-                if claims.get("iss") != self.issuer:
+                token_issuer = claims.get("iss")
+                if token_issuer != self.issuer:
                     self.logger.debug(
-                        "Token validation failed: issuer mismatch for client %s",
+                        "Token validation failed: issuer mismatch for client %s - expected='%s', actual='%s'",
                         client_id,
+                        self.issuer,
+                        token_issuer,
                     )
                     self.logger.info("Bearer token rejected for client %s", client_id)
                     return None
@@ -428,8 +442,10 @@ class JWTVerifier(TokenVerifier):
 
                 if not audience_valid:
                     self.logger.debug(
-                        "Token validation failed: audience mismatch for client %s",
+                        "Token validation failed: audience mismatch for client %s - expected=%s, actual=%s",
                         client_id,
+                        self.audience,
+                        aud,
                     )
                     self.logger.info("Bearer token rejected for client %s", client_id)
                     return None
