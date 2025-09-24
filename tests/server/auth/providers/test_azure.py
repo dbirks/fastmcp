@@ -199,7 +199,15 @@ class TestAzureProvider:
             "https://login.microsoftonline.com/my-tenant/discovery/v2.0/keys"
         )
         assert verifier.issuer == "https://login.microsoftonline.com/my-tenant/v2.0"
-        assert verifier.audience == "test_client"
+        assert isinstance(verifier.audience, list)
+        assert verifier.audience[0] == "test_client"
+        assert "api://my-api" in verifier.audience
+        assert getattr(verifier, "_allowed_issuers")[0] == (
+            "https://login.microsoftonline.com/my-tenant/v2.0"
+        )
+        assert "https://sts.windows.net/my-tenant/" in getattr(
+            verifier, "_allowed_issuers"
+        )
 
     @pytest.mark.asyncio
     async def test_authorize_filters_resource_and_prefixes_scopes_with_audience(self):

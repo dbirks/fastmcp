@@ -158,15 +158,21 @@ class AzureProvider(OAuthProxy):
         tenant_id_final = settings.tenant_id
 
         # Always validate tokens against the app's API client ID using JWT
-        issuer = f"https://login.microsoftonline.com/{tenant_id_final}/v2.0"
+        issuer_primary = f"https://login.microsoftonline.com/{tenant_id_final}/v2.0"
+        issuer_legacy = f"https://sts.windows.net/{tenant_id_final}/"
         jwks_uri = (
             f"https://login.microsoftonline.com/{tenant_id_final}/discovery/v2.0/keys"
         )
 
+        token_audiences: list[str] = [settings.client_id]
+        if self.identifier_uri and self.identifier_uri not in token_audiences:
+            token_audiences.append(self.identifier_uri)
+
         token_verifier = JWTVerifier(
             jwks_uri=jwks_uri,
-            issuer=issuer,
-            audience=settings.client_id,
+            issuer=issuer_primary,
+            issuers=[issuer_primary, issuer_legacy],
+            audience=token_audiences,
             algorithm="RS256",
             required_scopes=settings.required_scopes,
         )

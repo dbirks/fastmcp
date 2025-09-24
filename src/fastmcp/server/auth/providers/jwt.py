@@ -150,6 +150,7 @@ class JWTVerifierSettings(BaseSettings):
     public_key: str | None = None
     jwks_uri: str | None = None
     issuer: str | None = None
+    issuers: list[str] | None = None
     algorithm: str | None = None
     audience: str | list[str] | None = None
     required_scopes: list[str] | None = None
@@ -186,6 +187,7 @@ class JWTVerifier(TokenVerifier):
         public_key: str | None | NotSetT = NotSet,
         jwks_uri: str | None | NotSetT = NotSet,
         issuer: str | None | NotSetT = NotSet,
+        issuers: list[str] | None | NotSetT = NotSet,
         audience: str | list[str] | None | NotSetT = NotSet,
         algorithm: str | None | NotSetT = NotSet,
         required_scopes: list[str] | None | NotSetT = NotSet,
@@ -199,6 +201,7 @@ class JWTVerifier(TokenVerifier):
                        For symmetric algorithms (HS256, HS384, HS512): The shared secret string.
             jwks_uri: URI to fetch JSON Web Key Set (only for asymmetric algorithms)
             issuer: Expected issuer claim
+            issuers: Optional list of allowed issuer claims. When provided, takes precedence over `issuer`.
             audience: Expected audience claim(s)
             algorithm: JWT signing algorithm. Supported algorithms:
                       - Asymmetric: RS256/384/512, ES256/384/512, PS256/384/512 (default: RS256)
@@ -213,6 +216,7 @@ class JWTVerifier(TokenVerifier):
                     "public_key": public_key,
                     "jwks_uri": jwks_uri,
                     "issuer": issuer,
+                    "issuers": issuers,
                     "audience": audience,
                     "algorithm": algorithm,
                     "required_scopes": required_scopes,
@@ -252,7 +256,14 @@ class JWTVerifier(TokenVerifier):
         )
 
         self.algorithm = algorithm
-        self.issuer = settings.issuer
+        if settings.issuers:
+            self._allowed_issuers: list[str] | None = list(settings.issuers)
+        elif settings.issuer:
+            self._allowed_issuers = [settings.issuer]
+        else:
+            self._allowed_issuers = None
+
+        self.issuer = self._allowed_issuers[0] if self._allowed_issuers else None
         self.audience = settings.audience
         self.public_key = settings.public_key
         self.jwks_uri = settings.jwks_uri
@@ -405,13 +416,18 @@ class JWTVerifier(TokenVerifier):
 
             # Validate issuer - note we use issuer instead of issuer_url here because
             # issuer is optional, allowing users to make this check optional
-            if self.issuer:
+            if self._allowed_issuers:
                 token_issuer = claims.get("iss")
-                if token_issuer != self.issuer:
+                if token_issuer not in self._allowed_issuers:
+                    expected_display = (
+                        ", ".join(self._allowed_issuers)
+                        if len(self._allowed_issuers) > 1
+                        else self._allowed_issuers[0]
+                    )
                     self.logger.debug(
                         "Token validation failed: issuer mismatch for client %s - expected='%s', actual='%s'",
                         client_id,
-                        self.issuer,
+                        expected_display,
                         token_issuer,
                     )
                     self.logger.info("Bearer token rejected for client %s", client_id)
