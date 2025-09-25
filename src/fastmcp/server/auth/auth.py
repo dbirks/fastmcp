@@ -32,6 +32,48 @@ from starlette.middleware import Middleware
 from starlette.middleware.authentication import AuthenticationMiddleware
 from starlette.routing import Route
 
+from fastmcp.utilities.logging import get_logger
+
+
+class LoggingBearerAuthBackend(BearerAuthBackend):
+    """Bearer auth backend with additional debug logging."""
+
+    def __init__(self, token_verifier: TokenVerifierProtocol):
+        super().__init__(token_verifier)
+        self._logger = get_logger(__name__)
+
+    async def authenticate(self, conn):  # type: ignore[override]
+        auth_header = next(
+            (conn.headers.get(key) for key in conn.headers if key.lower() == "authorization"),
+            None,
+        )
+
+        if not auth_header or not auth_header.lower().startswith("bearer "):
+            self._logger.debug(
+                "RequireAuth: missing or invalid Authorization header",
+                extra={"header_present": bool(auth_header)},
+            )
+            return None
+
+        token = auth_header[7:]
+        self._logger.debug(
+            "RequireAuth: received bearer token",
+            extra={"token_length": len(token)},
+        )
+
+        result = await super().authenticate(conn)
+
+        if result is None:
+            self._logger.debug("RequireAuth: bearer token verification failed")
+        else:
+            auth_credentials, _ = result
+            self._logger.debug(
+                "RequireAuth: bearer token accepted",
+                extra={"scopes": list(auth_credentials.scopes)},
+            )
+
+        return result
+
 
 class AccessToken(_SDKAccessToken):
     """AccessToken that includes all JWT claims."""
@@ -128,7 +170,7 @@ class AuthProvider(TokenVerifierProtocol):
         return [
             Middleware(
                 AuthenticationMiddleware,
-                backend=BearerAuthBackend(self),
+                backend=LoggingBearerAuthBackend(self),
             ),
             Middleware(AuthContextMiddleware),
         ]
