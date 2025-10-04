@@ -40,9 +40,10 @@ class AzureProviderSettings(BaseSettings):
     base_url: str | None = None
     redirect_path: str | None = None
     required_scopes: list[str] | None = None
+    valid_scopes: list[str] | None = None
     allowed_client_redirect_uris: list[str] | None = None
 
-    @field_validator("required_scopes", mode="before")
+    @field_validator("required_scopes", "valid_scopes", mode="before")
     @classmethod
     def _parse_scopes(cls, v: object) -> list[str] | None:
         return parse_scopes(v)
@@ -96,6 +97,7 @@ class AzureProvider(OAuthProxy):
         base_url: str | NotSetT = NotSet,
         redirect_path: str | NotSetT = NotSet,
         required_scopes: list[str] | None | NotSetT = NotSet,
+        valid_scopes: list[str] | None | NotSetT = NotSet,
         allowed_client_redirect_uris: list[str] | NotSetT = NotSet,
         client_storage: KVStorage | None = None,
     ) -> None:
@@ -110,7 +112,13 @@ class AzureProvider(OAuthProxy):
                 against your app's client ID.
             base_url: Public URL of your FastMCP server (for OAuth callbacks)
             redirect_path: Redirect path configured in Azure (defaults to "/auth/callback")
-            required_scopes: Required scopes.
+            required_scopes: Required scopes that must be present in access tokens for validation.
+                Typically only your custom API scopes (e.g., ["MCP.Access"]).
+                OIDC scopes (openid, profile, offline_access) should NOT be in required_scopes
+                as they don't appear in access tokens.
+            valid_scopes: All scopes available for authorization requests.
+                Include both API scopes and OIDC scopes (e.g., ["MCP.Access", "openid", "profile", "offline_access"]).
+                If not provided, defaults to required_scopes.
             allowed_client_redirect_uris: List of allowed redirect URI patterns for MCP clients.
                 If None (default), all URIs are allowed. If empty list, no URIs are allowed.
             client_storage: Storage implementation for OAuth client registrations.
@@ -127,6 +135,7 @@ class AzureProvider(OAuthProxy):
                     "base_url": base_url,
                     "redirect_path": redirect_path,
                     "required_scopes": required_scopes,
+                    "valid_scopes": valid_scopes,
                     "allowed_client_redirect_uris": allowed_client_redirect_uris,
                 }.items()
                 if v is not NotSet
@@ -201,6 +210,7 @@ class AzureProvider(OAuthProxy):
             redirect_path=settings.redirect_path,
             issuer_url=settings.base_url,
             allowed_client_redirect_uris=settings.allowed_client_redirect_uris,
+            valid_scopes=settings.valid_scopes,
             client_storage=client_storage,
         )
 
