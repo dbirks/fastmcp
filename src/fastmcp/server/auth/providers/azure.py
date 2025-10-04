@@ -255,5 +255,21 @@ class AzureProvider(OAuthProxy):
         return await super().authorize(client, modified_params)
 
     def _add_prefix_to_scopes(self, scopes: list[str]) -> list[str]:
-        """Add Application ID URI prefix for authorization request."""
-        return [f"{self.identifier_uri}/{scope}" for scope in scopes]
+        """Add Application ID URI prefix for authorization request.
+
+        Standard OIDC scopes (openid, profile, email, offline_access, address, phone)
+        are implicit scopes that don't need prefixing. Only custom API scopes need
+        to be prefixed with the Application ID URI.
+        """
+        # Standard OIDC scopes that should not be prefixed
+        STANDARD_OIDC_SCOPES = {"openid", "profile", "email", "offline_access", "address", "phone"}
+
+        prefixed = []
+        for scope in scopes:
+            if scope in STANDARD_OIDC_SCOPES:
+                # Keep standard OIDC scopes as-is
+                prefixed.append(scope)
+            else:
+                # Prefix custom API scopes
+                prefixed.append(f"{self.identifier_uri}/{scope}")
+        return prefixed
